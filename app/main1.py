@@ -7,8 +7,9 @@ from psycopg2.extras import RealDictCursor
 import time
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import mode
-from . import models, schemas
+from . import models, schemas, util
 from .database import engine, get_db
+
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -24,23 +25,23 @@ app = FastAPI()
 #     return{"data": posts} 
 
 
-@app.get("/posts", response_model= List[schemas.ResPost])
+@app.get("/posts", response_model=List[schemas.ResPost])
 def getpost(db: Session = Depends(get_db)):
     posts = db.query(models.Post).all()
 
-    return {posts}
+    return posts
 
 
-@app.post("/posts", status_code = status.HTTP_201_CREATED)
+@app.post("/posts", status_code = status.HTTP_201_CREATED, response_model=schemas.ResPost)
 def createpost(newpost : schemas.createPost, db: Session = Depends(get_db)):
     posts = models.Post(**newpost.dict())
     db.add(posts)
     db.commit()
     db.refresh(posts)
-    return {posts}
+    return posts
 
 
-@app.get("/posts/{id}", response_model= schemas.ResPost)
+@app.get("/posts/{id}", response_model=schemas.ResPost)
 def get_post(id: int, db: Session = Depends(get_db)):
     posts = db.query(models.Post).filter(models.Post.id == id).first()
     
@@ -48,7 +49,7 @@ def get_post(id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code = status.HTTP_404_NOT_FOUND,
                             detail =  f'post with {id} was not found')
         
-    return {posts}
+    return posts
 
 @app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_post(id: int, db: Session = Depends(get_db)):
@@ -72,4 +73,17 @@ def update_post(id: int, Post: schemas.createPost, db: Session = Depends(get_db)
                             detail=f"post with the id {id} does not exist")
     posts.update(Post.dict(), synchronize_session=False)
     db.commit()
-    return {posts.first()}
+    return posts.first()
+
+
+@app.post("/users", status_code = status.HTTP_201_CREATED, response_model=schemas.Userout)
+def create_user(user: schemas.UserBase, db: Session = Depends(get_db)):
+
+    hashedpassword=util.hash(user.password)
+    user.password=hashedpassword
+
+    users = models.User(**user.dict())
+    db.add(users)
+    db.commit()
+    db.refresh(users)
+    return users
